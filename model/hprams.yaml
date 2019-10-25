@@ -1,0 +1,92 @@
+---
+
+  encoder:
+    conv:
+      filters: [32,32,16]
+      kernel_size: [[3,3],[3,3],[3,3]]
+      strides: [[1,1],[1,1],[1,1]]
+      padding: 'same'
+      dilation_rate: [[1,1],[1,1],[1,1]]
+      lambda: 0.001
+    pool:
+      pool_size: [[2,2],[2,2],[2,2]]
+      strides: [[2,2],[2,2],[2,2]]
+      padding: 'same'
+    norm:
+      momentum: 0.99
+      epsilon: 0.001
+    mlp:
+      d_layers: [512]
+      lambda: 0.001
+    scope: 'encoder'
+
+  bottleneck:
+    variational: 1
+    d_layers: 64
+    scope: 'vae'
+
+  decoder:
+    mlp:
+      d_layers: [512]
+      lambda: 0.001
+    conv:
+      filters: [16,32,32,18]  #must end with correct number of input params
+      kernel_size: [[3,3],[3,3],[3,3],[3,3]]
+      strides: [[1,1],[1,1],[1,1],[1,1]]
+      padding: 'same'
+      dilation_rate: [[1,1],[1,1],[1,1],[1,1]]
+      lambda: 0.001
+    norm:
+      momentum: 0.99
+      epsilon: 0.001
+    scope: 'decoder'
+
+  opt:
+    lr:
+      base: 0.0001 # Base learning rate
+      decay:
+        mode: 'staged' # Can be 'staged' or 'exp'. See get_model_fn in main.py for options
+        boundaries: [20, 30, 50] # Epochs where learning rate changes
+        # stages: [0.0001, 0.0001, 0.0001, 0.0002]
+        stages: [1, 0.1, 0.01, 0.002] # Learning rate multiplier at various stages, should have length len(boundaries)+1
+    beta1: 0.9 # ADAM optimizer parameter
+    beta2: 0.999 # ADAM optimizer parameter
+    epsilon: 0.00000001 # ADAM optimizer parameter
+
+  train:
+    sync: 0 # 0: asynchronous parameter update, 1: synchronized parameter update
+    num_gpus: 4 # Number of GPUs to use
+    ps: 'cpu' # Parameter server device
+    worker: 'gpu' # Worker devices
+    max_steps: 100 # Max training steps
+    log_int: 100 # Log message interval in steps
+    checkpoint_int: 100 #2000 # Checkpoint interval in steps
+    train_batch_size: 128 # Training example batch size
+    eval_batch_size: 100 # Evaluation example batch size
+    patience: 0 # Early stopping. 0: no early stopping, > 0: early stop after specified number of validations
+    warm_start_from: [] # Warm starting not implemented
+    plot: 1 # Plot flag. 0 : Don't show plots, 1: show plots
+    plot_int: 10 # Training loss plotting interval in steps
+    data_format: 'channels_last' # Data format, not implemented
+    n_trials: 1 # Number of times to run training, test set results will be summarized at end
+    clip_grads: 0 # 0: no clipping, > 0: clip gradients. See tf.clip_by_global_norm
+
+  data:
+    dset_path: '/Datasets/IVHMS/08-20168' # Dataset path on storage server
+    out_type: 'spec' # Data type, also directory name for processed data, must be 'spec' or 'ts'
+    file_names: 'data_files.txt' # Data files to use in dataset
+    param_names: 'data_params.yaml' # Parameter names to use for examples and labels
+    distort: 0 # Distort data. 0: no distortion, 1: distort (Not implemented)
+    normalize: 1 # Normalize training data
+    n_threads: 1 # Number of threads for processing data into tfrecords files
+    sample_mode: 'prop' # Can be 'prop' sample a portion of available examples from a file or 'all' to get all available examples
+    sample_constant: 50 # Multiplier. See download_and_process in get_uh60_data.py
+    n_steps: 10000 # Number of steps in sampled sequences
+    n_steps_long: 10000 # Number of steps in sampled long sequences for testing
+    p_train: 0.8 # Ratio of training data
+    p_valid: 0.1 # Ratio of validation data
+    p_test: 0.1 # Ratio of test data
+    spec_params:
+      win_type: 'hann'
+      win_len: 200
+      n_overlap: 100
