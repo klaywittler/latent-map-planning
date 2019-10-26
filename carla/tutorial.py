@@ -48,21 +48,14 @@ def main():
 
         # Now let's filter all the blueprints of type 'vehicle' and choose one
         # at random.
-        bp = random.choice(blueprint_library.filter('vehicle'))
-
-        # A blueprint contains the list of attributes that define a vehicle's
-        # instance, we can read them and modify some of them. For instance,
-        # let's randomize its color.
-        if bp.has_attribute('color'):
-            color = random.choice(bp.get_attribute('color').recommended_values)
-            bp.set_attribute('color', color)
+        vehicle_bp = blueprint_library.filter('model3')[0]
 
         # Now we need to give an initial transform to the vehicle. We choose a
         # random transform from the list of recommended spawn points of the map.
-        transform = random.choice(world.get_map().get_spawn_points())
+        vehicle_transform = random.choice(world.get_map().get_spawn_points())
 
         # So let's tell the world to spawn the vehicle.
-        vehicle = world.spawn_actor(bp, transform)
+        vehicle = world.spawn_actor(vehicle_bp, vehicle_transform)
 
         # It is important to note that the actors we create won't be destroyed
         # unless we call their "destroy" function. If we fail to call "destroy"
@@ -77,7 +70,7 @@ def main():
 
         # Let's add now a "depth" camera attached to the vehicle. Note that the
         # transform we give here is now relative to the vehicle.
-        camera_bp = blueprint_library.find('sensor.camera.depth')
+        camera_bp = blueprint_library.find('sensor.lidar.ray_cast')
         camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
         camera = world.spawn_actor(camera_bp, camera_transform, attach_to=vehicle)
         actor_list.append(camera)
@@ -86,32 +79,8 @@ def main():
         # Now we register the function that will be called each time the sensor
         # receives an image. In this example we are saving the image to disk
         # converting the pixels to gray-scale.
-        cc = carla.ColorConverter.LogarithmicDepth
-        camera.listen(lambda image: image.save_to_disk('_out/%06d.png' % image.frame_number, cc))
-
-        # Oh wait, I don't like the location we gave to the vehicle, I'm going
-        # to move it a bit forward.
-        location = vehicle.get_location()
-        location.x += 40
-        vehicle.set_location(location)
-        print('moved vehicle to %s' % location)
-
-        # But the city now is probably quite empty, let's add a few more
-        # vehicles.
-        transform.location += carla.Location(x=40, y=-3.2)
-        transform.rotation.yaw = -180.0
-        for _ in range(0, 10):
-            transform.location.x += 8.0
-
-            bp = random.choice(blueprint_library.filter('vehicle'))
-
-            # This time we are using try_spawn_actor. If the spot is already
-            # occupied by another object, the function will return None.
-            npc = world.try_spawn_actor(bp, transform)
-            if npc is not None:
-                actor_list.append(npc)
-                npc.set_autopilot()
-                print('created %s' % npc.type_id)
+        # cc = carla.ColorConverter.LogarithmicDepth
+        camera.listen(lambda image: image.save_to_disk('_out/%06d.txt' % image.frame_number))
 
         time.sleep(5)
 

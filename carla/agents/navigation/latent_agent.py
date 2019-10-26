@@ -17,7 +17,7 @@ from agents.navigation.local_planner import LocalPlanner
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 
-class BasicAgent(Agent):
+class LatentAgent(Agent):
     """
     BasicAgent implements a basic agent that navigates scenes to reach a given
     target destination. This agent respects traffic lights and other vehicles.
@@ -28,7 +28,7 @@ class BasicAgent(Agent):
 
         :param vehicle: actor to apply to local planner logic onto
         """
-        super(BasicAgent, self).__init__(vehicle)
+        super(LatentAgent, self).__init__(vehicle)
 
         self._proximity_threshold = 10.0  # meters
         self._state = AgentState.NAVIGATING
@@ -106,7 +106,7 @@ class BasicAgent(Agent):
             hazard_detected = True
 
         # check for the state of the traffic lights
-        light_state, traffic_light = False, None #self._is_light_red(lights_list)
+        light_state, traffic_light = False, None
         if light_state:
             if debug:
                 print('=== RED LIGHT AHEAD [{}])'.format(traffic_light.id))

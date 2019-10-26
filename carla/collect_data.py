@@ -7,7 +7,35 @@
 # For a copy, see <https://opensource.org/licenses/MIT>.
 
 """
-    Example of automatic vehicle control from client side.
+Welcome to CARLA control.
+
+Use ARROWS or WASD keys for control.
+
+    W            : throttle
+    S            : brake
+    AD           : steer
+    Q            : toggle reverse
+    Space        : hand-brake
+    P            : toggle autopilot
+    M            : toggle manual transmission
+    ,/.          : gear up/down
+
+    TAB          : change sensor position
+    `            : next sensor
+    [1-9]        : change to sensor [1-9]
+    C            : change weather (Shift+C reverse)
+    Backspace    : change vehicle
+
+    R            : toggle recording images to disk
+
+    CTRL + R     : toggle recording of simulation (replacing any previous)
+    CTRL + P     : start replaying last recorded simulation
+    CTRL + +     : increments the start time of the replay by 1 second (+SHIFT = 10 seconds)
+    CTRL + -     : decrements the start time of the replay by 1 second (+SHIFT = 10 seconds)
+
+    F1           : toggle HUD
+    H/?          : toggle help
+    ESC          : quit
 """
 
 from __future__ import print_function
@@ -87,6 +115,7 @@ import carla
 from carla import ColorConverter as cc
 from agents.navigation.roaming_agent import RoamingAgent
 from agents.navigation.basic_agent import BasicAgent
+from agents.navigation.latent_agent import LatentAgent
 
 
 # ==============================================================================
@@ -737,8 +766,12 @@ def game_loop(args):
         world = World(client.get_world(), hud, args.filter)
         controller = KeyboardControl(world, False)
 
-        if args.agent == "Roaming":
-            agent = RoamingAgent(world.player)
+        if args.agent == "Latent":
+            agent = LatentAgent(world.player)
+            spawn_point = world.map.get_spawn_points()[0]
+            agent.set_destination((spawn_point.location.x,
+                                   spawn_point.location.y,
+                                   spawn_point.location.z))
         else:
             agent = BasicAgent(world.player)
             spawn_point = world.map.get_spawn_points()[0]
@@ -804,10 +837,10 @@ def main():
     argparser.add_argument(
         '--filter',
         metavar='PATTERN',
-        default='vehicle.*',
+        default='model3',
         help='actor filter (default: "vehicle.*")')
     argparser.add_argument("-a", "--agent", type=str,
-                           choices=["Roaming", "Basic"],
+                           choices=["Latent","Roaming", "Basic"],
                            help="select which agent to run",
                            default="Roaming")
     args = argparser.parse_args()

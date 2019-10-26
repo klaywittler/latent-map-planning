@@ -99,7 +99,7 @@ class LocalPlanner(object):
         """
         # default params
         self._dt = 1.0 / 20.0
-        self._target_speed = 20.0  # Km/h
+        self._target_speed = 40.0  # Km/h
         self._sampling_radius = self._target_speed * 1 / 3.6  # 1 seconds horizon
         self._min_distance = self._sampling_radius * self.MIN_DISTANCE_PERCENTAGE
         args_lateral_dict = {
@@ -237,8 +237,8 @@ class LocalPlanner(object):
             for i in range(max_index + 1):
                 self._waypoint_buffer.popleft()
 
-        if debug:
-            draw_waypoints(self._vehicle.get_world(), [self.target_waypoint], self._vehicle.get_location().z + 1.0)
+        # if debug:
+        #     draw_waypoints(self._vehicle.get_world(), [self.target_waypoint], self._vehicle.get_location().z + 1.0)
 
         return control
 
