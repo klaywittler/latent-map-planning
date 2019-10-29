@@ -183,8 +183,10 @@ class World(object):
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
         self.gnss_sensor = GnssSensor(self.player)
         self.camera_manager = CameraManager(self.player, self.hud)
-        self.camera_manager.transform_index = cam_pos_index
-        self.camera_manager.set_sensor(cam_index, notify=False)
+
+        for i, sensor in enumerate(self.camera_manager.sensors):
+            self.camera_manager.transform_index = i
+            self.camera_manager.set_sensor(i, notify=False)
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
@@ -658,16 +660,14 @@ class CameraManager(object):
         self.recording = False
         self._camera_transforms = [
             carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15)),
+            carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15,yaw=45)),
+            carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15,yaw=-45)),
             carla.Transform(carla.Location(x=1.5, z=2.4))]
         self.transform_index = 1
         self.sensors = [
-            ['sensor.camera.rgb', cc.Raw, 'Camera RGB'],
-            ['sensor.camera.depth', cc.Raw, 'Camera Depth (Raw)'],
-            ['sensor.camera.depth', cc.Depth, 'Camera Depth (Gray Scale)'],
-            ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)'],
-            ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic Segmentation (Raw)'],
-            ['sensor.camera.semantic_segmentation', cc.CityScapesPalette,
-             'Camera Semantic Segmentation (CityScapes Palette)'],
+            ['sensor.camera.rgb', cc.Raw, 'Front Camera RGB'],
+            ['sensor.camera.rgb', cc.Raw, 'Left Camera RGB'],
+            ['sensor.camera.rgb', cc.Raw, 'Right Camera RGB'],
             ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)']]
         world = self._parent.get_world()
         bp_library = world.get_blueprint_library()
@@ -742,7 +742,9 @@ class CameraManager(object):
             array = array[:, :, ::-1]
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
         if self.recording:
-            image.save_to_disk('_out/%08d' % image.frame_number)
+            for sensor in self.sensors:
+                image.save_to_disk('_out/%08d' % image.frame_number)
+
 
 
 # ==============================================================================

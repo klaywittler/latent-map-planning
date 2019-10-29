@@ -70,17 +70,19 @@ def main():
 
         # Let's add now a "depth" camera attached to the vehicle. Note that the
         # transform we give here is now relative to the vehicle.
-        camera_bp = blueprint_library.find('sensor.lidar.ray_cast')
-        camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
-        camera = world.spawn_actor(camera_bp, camera_transform, attach_to=vehicle)
-        actor_list.append(camera)
-        print('created %s' % camera.type_id)
+        camera_bp = [blueprint_library.find('sensor.camera.rgb'), blueprint_library.find('sensor.lidar.ray_cast')]
+        camera_transform = [carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15)), carla.Transform(carla.Location(x=1.5, z=2.4))]
+        for i, sensor in enumerate(camera_bp):
+            camera = world.spawn_actor(camera_bp[i], camera_transform[i], attach_to=vehicle)
+            actor_list.append(camera)
+            print('created %s' % camera.type_id)
+            camera.listen(lambda image: image.save_to_disk('_out/%08d' % image.frame_number))
 
         # Now we register the function that will be called each time the sensor
         # receives an image. In this example we are saving the image to disk
         # converting the pixels to gray-scale.
         # cc = carla.ColorConverter.LogarithmicDepth
-        camera.listen(lambda image: image.save_to_disk('_out/%06d.txt' % image.frame_number))
+        
 
         time.sleep(5)
 
