@@ -22,10 +22,52 @@ import carla
 
 import random
 import time
+import threading
+# import pygame
+import weakref
 
+class World(object):
+    def __init__(self, carla_world):
+        self.world = carla_world
+        self.map = self.world.get_map()
+        self.blueprint_library = self.world.get_blueprint_library()
+        self.actor_list = []
+
+class Car(object):
+    def __init__(self, vehicle_bp, transform, carla_world):
+        self.world = carla_world
+
+        bp = self.world.blueprint_library.filter(vehicle_bp)[0]
+        self.vehicle_transform = transform
+        self.vehicle = self.world.world.spawn_actor(bp, self.vehicle_transform)
+        self.world.actor_list.append(self.vehicle)
+
+        self.vehicle.set_autopilot(True)
+
+
+class Sensor(object):
+    def __init__(self, sensor_bp, transform, parent_actor):
+        self.vehicle = parent_actor
+        self.camera_transform = transform
+        self.world = self.vehicle.world
+
+        bp = self.world.blueprint_library.find(sensor_bp)
+        self.sensor = self.world.world.spawn_actor(bp, self.camera_transform, attach_to=self.vehicle.vehicle)
+        
+        self.world.actor_list.append(self.sensor)
+
+        weak_self = weakref.ref(self)
+        self.sensor.listen(lambda image: Sensor.callback(weak_self,image))
+
+    @staticmethod
+    def callback(weak_self, data):
+        self = weak_self()
+        if not self:
+            return
+        data.save_to_disk('_out/%08d_%i' % (data.frame_number, self.sensor.id))
+        
 
 def main():
-    actor_list = []
 
     # In this tutorial script, we are going to add a vehicle to the simulation
     # and let it drive in autopilot. We will also create a camera attached to
@@ -38,58 +80,28 @@ def main():
         client = carla.Client('localhost', 2000)
         client.set_timeout(5.0)
 
-        # Once we have a client we can retrieve the world that is currently
-        # running.
-        world = client.get_world()
+        world = World(client.get_world())
 
-        # The world contains the list blueprints that we can use for adding new
-        # actors into the simulation.
-        blueprint_library = world.get_blueprint_library()
+        vehicle_bp = 'model3'
+        vehicle_transform = random.choice(world.map.get_spawn_points())
 
-        # Now let's filter all the blueprints of type 'vehicle' and choose one
-        # at random.
-        vehicle_bp = blueprint_library.filter('model3')[0]
+        vehicle = Car(vehicle_bp, vehicle_transform, world)
 
-        # Now we need to give an initial transform to the vehicle. We choose a
-        # random transform from the list of recommended spawn points of the map.
-        vehicle_transform = random.choice(world.get_map().get_spawn_points())
-
-        # So let's tell the world to spawn the vehicle.
-        vehicle = world.spawn_actor(vehicle_bp, vehicle_transform)
-
-        # It is important to note that the actors we create won't be destroyed
-        # unless we call their "destroy" function. If we fail to call "destroy"
-        # they will stay in the simulation even after we quit the Python script.
-        # For that reason, we are storing all the actors we create so we can
-        # destroy them afterwards.
-        actor_list.append(vehicle)
-        print('created %s' % vehicle.type_id)
-
-        # Let's put the vehicle to drive around.
-        vehicle.set_autopilot(True)
-
-        # Let's add now a "depth" camera attached to the vehicle. Note that the
-        # transform we give here is now relative to the vehicle.
-        camera_bp = [blueprint_library.find('sensor.camera.rgb'), blueprint_library.find('sensor.lidar.ray_cast')]
-        camera_transform = [carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15)), carla.Transform(carla.Location(x=1.5, z=2.4))]
-        for i, sensor in enumerate(camera_bp):
-            camera = world.spawn_actor(camera_bp[i], camera_transform[i], attach_to=vehicle)
-            actor_list.append(camera)
-            print('created %s' % camera.type_id)
-            camera.listen(lambda image: image.save_to_disk('_out/%08d' % image.frame_number))
-
-        # Now we register the function that will be called each time the sensor
-        # receives an image. In this example we are saving the image to disk
-        # converting the pixels to gray-scale.
-        # cc = carla.ColorConverter.LogarithmicDepth
         
+        camera_bp = ['sensor.camera.rgb', 'sensor.camera.rgb', 'sensor.lidar.ray_cast']
+        camera_transform = [carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15, yaw=40)), carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15, yaw=-40)), carla.Transform(carla.Location(x=1.5, z=2.4))]
+
+        cam1 = Sensor(camera_bp[0], camera_transform[0], vehicle)
+        cam2 = Sensor(camera_bp[1], camera_transform[1], vehicle)
+        lidar = Sensor(camera_bp[2], camera_transform[2], vehicle)
+
 
         time.sleep(5)
 
     finally:
 
         print('destroying actors')
-        for actor in actor_list:
+        for actor in world.actor_list:
             actor.destroy()
         print('done.')
 
