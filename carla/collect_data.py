@@ -42,20 +42,19 @@ def game_loop():
         world = World(client.get_world())
 
         # settings = world.world.get_settings()
-        # settings.fixed_delta_seconds = 0.05
+        # settings.fixed_delta_seconds = 0.2
         # settings.synchronous_mode = True
         # world.world.apply_settings(settings)
 
 
         vehicle_bp = 'model3'
-        vehicle_transform = random.choice(world.map.get_spawn_points()) # carla.Transform(carla.Location(x=48.0, y=8.001, z=0.5), carla.Rotation(yaw=-177))
-        print(vehicle_transform)
+        vehicle_transform = carla.Transform(carla.Location(x=46.1, y=-5.6, z=0.5), carla.Rotation(yaw=-177))
+        
         vehicle = Car(vehicle_bp, vehicle_transform, world)
 
         agent = agent = BasicAgent(vehicle.vehicle)
-        # spawn_point = world.map.get_spawn_points()[0]
-        # agent.set_destination((spawn_point.location.x, spawn_point.location.y, spawn_point.location.z))
-        spawn_point = carla.Transform(carla.Location(x=49.0001, y=7.998, z=0.5), carla.Rotation(yaw=90))
+        
+        spawn_point = carla.Transform(carla.Location(x=-127.8, y=68.9, z=0.5), carla.Rotation(yaw=90))
         print(spawn_point)
         agent.set_destination((spawn_point.location.x, spawn_point.location.y, spawn_point.location.z))
         
@@ -68,16 +67,19 @@ def game_loop():
 
         file = open("control_input.txt", "a")
         while True:
-            if not world.world.wait_for_tick(10.0):
+            world_snapshot = world.world.wait_for_tick(10.0)
+
+            if not world_snapshot:
                 continue
 
             control = agent.run_step()
-            w = str(0) + ',' + str(control.steer) + ',' + str(control.throttle) + ',' + str(control.brake) + '\n'
+            w = str(world_snapshot.frame_count) + ',' + str(control.steer) + ',' + str(control.throttle) + ',' + str(control.brake) + '\n'
             file.write(w)
             control.manual_gear_shift = False
             vehicle.vehicle.apply_control(control)
 
             world.world.tick()
+
 
     finally:
         if world is not None:
