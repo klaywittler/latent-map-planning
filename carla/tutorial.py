@@ -41,6 +41,11 @@ def game_loop():
 
         world = World(client.get_world())
 
+        # settings = world.world.get_settings()
+        # settings.fixed_delta_seconds = 0.05
+        # settings.synchronous_mode = True
+        # world.world.apply_settings(settings)
+
 
         vehicle_bp = 'model3'
         vehicle_transform = random.choice(world.map.get_spawn_points()) # carla.Transform(carla.Location(x=48.0, y=8.001, z=0.5), carla.Rotation(yaw=-177))
@@ -66,7 +71,6 @@ def game_loop():
             if not world.world.wait_for_tick(10.0):
                 continue
 
-            print(client.read_data())
             control = agent.run_step()
             w = str(0) + ',' + str(control.steer) + ',' + str(control.throttle) + ',' + str(control.brake) + '\n'
             file.write(w)
