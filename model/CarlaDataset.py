@@ -17,7 +17,6 @@ class CarlaDataset(Dataset):
     
     def __len__(self):
         num_rows, _ = self.df_as_mat.shape
-        print('The length is: {}'.format(num_rows))
         return num_rows
     
     def __getitem__(self, idx):
@@ -43,8 +42,6 @@ class CarlaDataset(Dataset):
                     np_arr = self.transform(np_arr)
                 images.append(np_arr)
         images = np.array(images)
-        print(images.shape)
-        print(control_inputs.shape)
         return images, control_inputs 
         
     def _get_dataframe(self):
