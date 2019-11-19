@@ -39,6 +39,12 @@ class World(object):
         self.blueprint_library = self.world.get_blueprint_library()
         self.actor_list = []
 
+        settings = self.world.get_settings()
+        # settings.no_rendering_mode = True
+        settings.synchronous_mode = True
+        settings.fixed_delta_seconds = 0.05
+        self.world.apply_settings(settings)
+
     def destroy(self):
         print('destroying actors')
         for actor in self.actor_list:
