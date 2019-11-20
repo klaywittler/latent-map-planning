@@ -26,12 +26,40 @@ class CarlaDataset(Dataset):
         # We're gonna do some hardcore hard-coding here.
         # First, extract our control inputs
         row = self.df_as_mat[idx, :]
-        # Filter out all our numbers- assume all numbers are control inputs.
+        # xcxc We're... We're not exactly doing anything with our control inputs. For now.
         control_inputs = np.array(
             [x for x in row if isinstance(x, numbers.Number)])
-        # Then we're going to load up our images.
-        # A few notes here
-        # 1. There's absolutely no guarantee that there are two images.
+        
+        curr_images = self._get_image_tensor_for_row(row[0])
+        
+        # Get the next row
+        next_delta = 4 # xcxc This is a hardcoded parameter from Klayton's data.
+        next_input_id = int(row[0]) + next_delta
+        num_rows_next = np.sum(self.df['input_num'] == str(next_input_id))
+        if num_rows_next == 0:
+            # No next: treat it as if we're stationary
+            return curr_images, curr_images
+        else:
+            next_images = self._get_image_tensor_for_row(str(next_input_id))
+            return curr_images, next_images
+
+#         return images, control_inputs 
+    
+    def _get_image_tensor_for_row(self, row_id):
+        '''
+        Inputs:
+            row_id: String that represents the input_num
+        Outputs:
+            A (2 x H x W x 4) 4D matrix of the two images.
+        '''
+        # The row_id should be the input_num. Should also be a string.
+        row = self.df[self.df['input_num'] == row_id]
+        n_res, _ = row.shape
+        if n_res > 1:
+            # xcxc I'm assuming there's only one row per row_id.
+            # This may or may not be a strictly held invariant.
+            print("XCXC: THERE ARE MORE THAN 1 ROW FOR A ROW_ID")
+        row = row.values[0]
         images = []
         for ele in row:
             if str(ele).split('.')[-1] == 'png':
@@ -42,7 +70,7 @@ class CarlaDataset(Dataset):
                     np_arr = self.transform(np_arr)
                 images.append(np_arr)
         images = np.array(images)
-        return images, control_inputs 
+        return images
         
     def _get_dataframe(self):
         control_input_df = self._get_control_input_df()
@@ -55,7 +83,7 @@ class CarlaDataset(Dataset):
     def _get_control_input_df(self):
         # xcxc I'm also assuming that our columns in control_input stay static like so.
         control_input_df = pd.read_csv(os.path.join(self.data_dir, 'control_input.txt'),
-                               names=['input_num', 'ctr1', 'ctr2', 'ctr3'])
+                               names=['input_num', 'ctr1', 'ctr2'])
         control_input_df['input_num'] = control_input_df['input_num'].astype('str')
         return control_input_df
     
@@ -72,14 +100,10 @@ class CarlaDataset(Dataset):
             if fn_number not in filename_groupings:
                 filename_groupings[fn_number] = []
             filename_groupings[fn_number].append(fn)
-
+            
         # Then make a dataframe from this dictionary
         filename_df = pd.DataFrame.from_dict(
             filename_groupings, orient='index').reset_index()
         filename_df = filename_df.dropna(subset=[0,1]) # Drop if any of our images is None.
-        filename_df = filename_df[filename_df['index'].astype('int') < 494] # Drop all the ones that are after 494
+#         filename_df = filename_df[filename_df['index'].astype('int') < 494] # Drop all the ones that are after 494
         return filename_df
-
-
-
-
