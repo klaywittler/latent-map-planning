@@ -38,12 +38,10 @@ class CarlaDataset(Dataset):
         num_rows_next = np.sum(self.df['input_num'] == str(next_input_id))
         if num_rows_next == 0:
             # No next: treat it as if we're stationary
-            return curr_images, curr_images
+            return (curr_images, curr_images, np.zeros(len(control_inputs)))
         else:
             next_images = self._get_image_tensor_for_row(str(next_input_id))
-            return curr_images, next_images
-
-#         return images, control_inputs 
+            return (curr_images, next_images, control_inputs)
     
     def _get_image_tensor_for_row(self, row_id):
         '''
