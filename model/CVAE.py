@@ -16,7 +16,7 @@ class CVAE(nn.Module):
 		self.shapes = {}
 
 	# channel_in, c_out, kernel_size, stride, padding
-	def convbn(self,ci,co,ksz,s=1,pz=1):
+	def convbn(self,ci,co,ksz,s=1,pz=0):
 		return nn.Sequential(
 			nn.Conv2d(ci,co,ksz,stride=s,padding=pz),
 			nn.ReLU(),
@@ -58,16 +58,16 @@ class CVAE(nn.Module):
 	def decoder(self, z):
 		m = nn.Linear(self.z_size,self.hidden)
 		m1 = self.mlp(self.hidden,self.shapes['len'])
-		h = m(z)
-		h1 = m1(h)
-		x = torch.reshape(h1,(self.shapes['tensor']))
-		#make sure to reshape data correctly
 		dec = nn.Sequential(
 			nn.Dropout(self.d),
 			self.convbn(16,32,1,1),
 			self.convbn(32,64,1,1),
-			self.convbn(64,self.im_size,1,1)
-			)
+			self.convbn(64,self.im_size,1,1))
+		#check where nonlinearities should go
+		h = m(z)
+		h1 = m1(h)
+		x = torch.reshape(h1,(self.shapes['tensor']))
+		#make sure to reshape data correctly
 		out = dec(x)
 		#maybe put a nonlinearity on the output dec
 		return out
@@ -76,5 +76,4 @@ class CVAE(nn.Module):
 		h = self.encoder(x)
 		z, z_mean, z_stdev = self.bottleneck(h)
 		out = self.decoder(z)
-		pdb.set_trace()
 		return out, z, z_mean, z_stdev
