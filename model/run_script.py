@@ -13,26 +13,41 @@ from CarlaDataset import CarlaDataset
 from CVAE import CVAE
 
 
-def main(args):
+def main():
+    model = CVAE()
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999),
+                            eps=1e-08, weight_decay=0)
+    epochs = 10
     dl = DataLoader(CarlaDataset('../data/'))
-    for i, X in enumerate(dl):
-        img1 = X[0]
-        img2 = X[1]
-        ctrl_inputs = X[2]
+    for epoch in range(epochs):
+        for i, X in enumerate(dl):
+            img1 = X[0]
+            img2 = X[1]
+            ctrl_inputs = X[2]
 
-        im_t = img1[0].view(2,4,300,-1)
-        im_t = (im_t/255).float()
-        out, z, z_mean, z_stdev = CVAE().forward(im_t)
+            im_1 = img1[0].view(2,4,300,-1)
+            im_1 = (im_1/255).float()
+            im_2 = img2[0].view(2,4,300,-1)
+            im_2 = (im_2/255).float()
 
-        pdb.set_trace()
+            out, z, z_mean, z_stdev = model.forward(im_1)
+            loss = criterion(out,im_2)
+            optimizer.zero_grad()
+            loss.backward()
+
+            if (i+1) % 10 == 0:
+              print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, epochs, i+1, total_step, loss.item()))
+
+
+            pdb.set_trace()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--train_samples', type=int, default=30000)
-    parser.add_argument('--val_samples', type=int, default=5000)
-    parser.add_argument('--built_in', type=bool, default=False)
+    # parser.add_argument('--lr', type=int, default=0.005)
+
     args = parser.parse_args()
 
-    main(args)
+    main()
