@@ -20,7 +20,9 @@ def main(args):
         img2 = X[1]
         ctrl_inputs = X[2]
 
-        out, z, z_mean, z_stdev = CVAE().forward(img1)
+        im_t = img1[0].view(2,4,300,-1)
+        im_t = (im_t/255).float()
+        out, z, z_mean, z_stdev = CVAE().forward(im_t)
 
         pdb.set_trace()
 
