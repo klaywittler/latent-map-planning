@@ -31,7 +31,6 @@ class CarlaDataset(Dataset):
             [x for x in row if isinstance(x, numbers.Number)])
         
         curr_images = self._get_image_tensor_for_row(row[0])
-        
         # Get the next row
         next_delta = 4 # xcxc This is a hardcoded parameter from Klayton's data.
         next_input_id = int(row[0]) + next_delta
@@ -63,13 +62,21 @@ class CarlaDataset(Dataset):
             if str(ele).split('.')[-1] == 'png':
                 full_name = os.path.join(self.data_dir, '_out', ele)
                 np_arr = np.asarray(Image.open(full_name))
+                np_arr = self._rearrange_axes_image(np_arr)
                 # Apply transform on each image independently.
                 if self.transform:
                     np_arr = self.transform(np_arr)
                 images.append(np_arr)
         images = np.array(images)
         return images
-        
+    
+    def _rearrange_axes_image(self, img):
+        H,W,_ = img.shape
+        new_img = np.zeros((3,H,W))
+        for i in range(3):
+            new_img[i,:,:] = img[:,:,i]
+        return new_img
+
     def _get_dataframe(self):
         control_input_df = self._get_control_input_df()
         filename_df = self._get_image_path_df()
