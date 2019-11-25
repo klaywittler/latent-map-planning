@@ -6,7 +6,7 @@ import numpy as np
 import pdb
 
 #input is a tuple of images t and t+1 with lidar and control input
-class CVAE(nn.Module):
+class siameseCVAE(nn.Module):
 	def __init__(self):
 		super().__init__()
 		d = 0.4
