@@ -27,10 +27,14 @@ class CarlaDataset(Dataset):
         # First, extract our control inputs
         row = self.df_as_mat[idx, :]
         # xcxc We're... We're not exactly doing anything with our control inputs. For now.
+        # We lop off the final value in -1 because of our dataframe- we 
+        # interpret the indicator value of whether it's stationary or not 
+        # as a boolean, and python interprets it as a number.
         control_inputs = np.array(
-            [x for x in row if isinstance(x, numbers.Number)])
+            [x for x in row if isinstance(x, numbers.Number)][:-1])
+        is_stationary = row[-1]
         
-        curr_images = self._get_image_tensor_for_row(row[0])
+        curr_images = self._get_image_tensor_for_row(row[0], is_stationary)
         # Get the next row
         next_delta = 4 # xcxc This is a hardcoded parameter from Klayton's data.
         next_input_id = int(row[0]) + next_delta
@@ -38,11 +42,15 @@ class CarlaDataset(Dataset):
         if num_rows_next == 0:
             # No next: treat it as if we're stationary
             return (curr_images, curr_images, np.zeros(len(control_inputs)))
+        elif is_stationary == True:
+            # If it's stationary, then simply return our current images
+            return (curr_images, curr_images, np.zeros(len(control_inputs)))
         else:
-            next_images = self._get_image_tensor_for_row(str(next_input_id))
+            next_images = self._get_image_tensor_for_row(
+                str(next_input_id), is_stationary)
             return (curr_images, next_images, control_inputs)
     
-    def _get_image_tensor_for_row(self, row_id):
+    def _get_image_tensor_for_row(self, row_id, is_stationary):
         '''
         Inputs:
             row_id: String that represents the input_num
@@ -50,7 +58,9 @@ class CarlaDataset(Dataset):
             A (2 x H x W x 4) 4D matrix of the two images.
         '''
         # The row_id should be the input_num. Should also be a string.
-        row = self.df[self.df['input_num'] == row_id]
+        which_row = (self.df['input_num'] == row_id)
+        where_stationary = (self.df['is_stationary'] == is_stationary)
+        row = self.df[which_row & where_stationary]
         n_res, _ = row.shape
         if n_res > 1:
             # xcxc I'm assuming there's only one row per row_id.
@@ -83,8 +93,16 @@ class CarlaDataset(Dataset):
         df = control_input_df.merge(right=filename_df,
                                     left_on='input_num',
                                     right_on='index')
-        return df
-    
+        # Then, we add a column to our dataframe saying whether it's stationary or not
+        num_rows, _ = df.shape
+        df['is_stationary'] = np.zeros((num_rows), dtype=bool)
+        # Then make a copy and set is_stationary to true...
+        df_copy = df.copy()
+        df_copy['is_stationary'] = np.ones((num_rows), dtype=bool)
+        # then stack and return
+        final_df = pd.concat([df, df_copy])
+        return final_df
+
     def _get_control_input_df(self):
         # xcxc I'm also assuming that our columns in control_input stay static like so.
         control_input_df = pd.read_csv(os.path.join(self.data_dir, 'control_input.txt'),
