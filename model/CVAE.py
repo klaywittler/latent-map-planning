@@ -12,7 +12,7 @@ class CVAE(nn.Module):
 		d = 0.4
 		self.z_size = 64
 		self.hidden = 256
-		ch_sz = 4
+		ch_sz = 3
 		last_conv = 16
 		self.tensor = (2,last_conv,300,400)
 		flat = np.prod(self.tensor)
