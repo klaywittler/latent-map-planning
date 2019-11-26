@@ -34,10 +34,12 @@ def main():
             img1_ = img_[:,0,:,:,:]
             img2_ = img_[:,1,:,:,:]
 
-            out, z, z_mean, z_stdev = model.forward(img1,img2)
-            loss = criterion(out,im_2)
+            xhat, yhat, z, z_mean, z_stdev = model.forward(img1,img2,ctrl_inputs)
+            lossx = criterion(xhat,img1_)
+            lossy = criterion(yhat,img2_)
             optimizer.zero_grad()
-            loss.backward()
+            lossx.backward()
+            lossy.backward()
 
             if (i+1) % 10 == 0:
               print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, epochs, i+1, total_step, loss.item()))
