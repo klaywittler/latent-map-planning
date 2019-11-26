@@ -13,15 +13,20 @@ class CVAE(nn.Module):
 		self.z_size = 64
 		self.hidden = 256
 		ch_sz = 3
-		last_conv = 16
+		last_conv = 4
 		self.tensor = (2,last_conv,300,400)
 		flat = np.prod(self.tensor)
 
 		# channel_in, c_out, kernel_size, stride, padding
-		def convbn(ci,co,ksz,s=1,pz=0):
+		def convbn(ci,co,ksz,s=1,pz=0):		#ReLU nonlinearity
 			return nn.Sequential(
 				nn.Conv2d(ci,co,ksz,stride=s,padding=pz),
 				nn.ReLU(),
+				nn.BatchNorm2d(co))
+		def convlast(ci,co,ksz,s=1,pz=0):	#Sigmoid nonlinearity
+			return nn.Sequential(
+				nn.Conv2d(ci,co,ksz,stride=s,padding=pz),
+				nn.Sigmoid(),
 				nn.BatchNorm2d(co))
 		def mlp(in_size,hidden):
 			return nn.Sequential(
@@ -33,8 +38,8 @@ class CVAE(nn.Module):
 		self.enc = nn.Sequential(
 				nn.Dropout(d),
 				convbn(ch_sz,64,3,1,1),
-				convbn(64,32,1,1),
-				convbn(32,last_conv,1,1))
+				convbn(64,16,1,1),
+				convbn(16,last_conv,1,1))
 		self.m1 = mlp(flat,self.hidden)
 		self.zmean = nn.Linear(self.hidden,self.z_size)
 		self.zstdev = nn.Linear(self.hidden,self.z_size)
@@ -44,9 +49,9 @@ class CVAE(nn.Module):
 		self.m2 = mlp(self.hidden,flat)
 		self.dec = nn.Sequential(
 				nn.Dropout(d),
-				convbn(last_conv,32,1,1),
-				convbn(32,64,1,1),
-				convbn(64,ch_sz,1,1))
+				convbn(last_conv,16,1,1),
+				convbn(16,64,1,1),
+				convlast(64,ch_sz,1,1))
 
 	def encoder(self, x):
 		h_layer = torch.flatten(self.enc(x))	
