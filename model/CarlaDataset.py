@@ -8,10 +8,11 @@ from PIL import Image
 import numbers
 
 class CarlaDataset(Dataset):
-    def __init__(self, data_dir, transform=None):
+    def __init__(self, data_dir, load_as_grayscale=False, transform=None):
         # xcxc I'm assuming that the images live in _out.
         self.data_dir = data_dir
         self.transform = transform
+        self.load_as_grayscale = load_as_grayscale
         self.df = self._get_dataframe()
         self.df_as_mat = self.df.values
     
@@ -71,8 +72,12 @@ class CarlaDataset(Dataset):
         for ele in row:
             if str(ele).split('.')[-1] == 'png':
                 full_name = os.path.join(self.data_dir, '_out', ele)
-                np_arr = np.asarray(Image.open(full_name))
-                np_arr = self._rearrange_axes_image(np_arr)
+                pil_img = Image.open(full_name)
+                if self.load_as_grayscale: # If grayscale, then convert
+                    pil_img = pil_img.convert('L')
+                np_arr = np.asarray(pil_img)
+                if not self.load_as_grayscale: # If it's full 3 channels, then rearrange.
+                    np_arr = self._rearrange_axes_image(np_arr)
                 # Apply transform on each image independently.
                 if self.transform:
                     np_arr = self.transform(np_arr)
