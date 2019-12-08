@@ -72,19 +72,34 @@ class CarlaDataset(Dataset):
         for ele in row:
             if str(ele).split('.')[-1] == 'png':
                 full_name = os.path.join(self.data_dir, '_out', ele)
-                pil_img = Image.open(full_name)
-                if self.load_as_grayscale: # If grayscale, then convert
-                    pil_img = pil_img.convert('L')
-                np_arr = np.asarray(pil_img)
-                if not self.load_as_grayscale: # If it's full 3 channels, then rearrange.
-                    np_arr = self._rearrange_axes_image(np_arr)
-                # Apply transform on each image independently.
-                if self.transform:
-                    np_arr = self.transform(np_arr)
-                images.append(np_arr)
+                img_as_np_arr = self._load_image_and_maybe_apply_transform(full_name)
+                images.append(img_as_np_arr)
         images = np.array(images)
         return images
-    
+
+    def _load_image_and_maybe_apply_transform(self, image_loc):
+        '''
+        Inputs:
+            image_loc: The location of the image we want to load
+        Outputs:
+            Either the grayscale image, a RGB image with the axes flopped, or 
+            the RGB image with some series of transformations applied. 
+            All are converted to numpy arrays before yeeting them out.
+        '''
+        # I've been writing too much haskell
+        pil_img = Image.open(image_loc)
+        if self.load_as_grayscale:
+            pil_img = pil_img.convert('L')
+        
+        if self.transform:
+            transform_result = self.transform(pil_img)
+            return np.asarray(transform_result[:3, :, :])
+        else:
+            if self.load_as_grayscale:
+                return np.array(pil_img)
+            else:
+                return self._rearrange_axes_image(np.array(pil_img))
+
     def _rearrange_axes_image(self, img):
         H,W,_ = img.shape
         new_img = np.zeros((3,H,W))
