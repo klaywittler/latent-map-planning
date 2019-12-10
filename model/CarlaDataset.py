@@ -68,12 +68,16 @@ class CarlaDataset(Dataset):
             # This may or may not be a strictly held invariant.
             print("XCXC: THERE ARE MORE THAN 1 ROW FOR A ROW_ID")
         row = row.values[0]
-        images = []
+        filenames = []
         for ele in row:
             if str(ele).split('.')[-1] == 'png':
-                full_name = os.path.join(self.data_dir, '_out', ele)
-                img_as_np_arr = self._load_image_and_maybe_apply_transform(full_name)
-                images.append(img_as_np_arr)
+                filenames.append(ele)
+        filenames.sort()
+        images = []
+        for ele in filenames:
+            full_name = os.path.join(self.data_dir, '_out', ele)
+            img_as_np_arr = self._load_image_and_maybe_apply_transform(full_name)
+            images.append(img_as_np_arr)
         images = np.array(images)
         return images
 
