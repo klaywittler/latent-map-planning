@@ -8,12 +8,9 @@ transform = transforms.Compose([
         transforms.Resize((150,200)),
         transforms.ToTensor()])
 batch = 1
-path = "/content/drive/My Drive/Colab_Notebooks/ESE546_DL_Colab/project/data"
-
 vpcd = VelocityPredictionCarlaDataSet(
-    '../data/',
-    "00001078_208.png",
-    delta=10,
+    '../data/synced_single_camera',
+    delta=100,
     load_as_grayscale=True,
     transform=transform)
 dl = DataLoader(vpcd, batch_size=batch)

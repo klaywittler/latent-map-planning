@@ -12,13 +12,11 @@ from PIL import Image
 import numbers
 
 class VelocityPredictionCarlaDataSet(Dataset):
-    def __init__(self, data_dir, goal_image, delta=10, load_as_grayscale=False, transform=None):
+    def __init__(self, data_dir, goal_images={}, delta=100, load_as_grayscale=False, transform=None):
         # xcxc I'm assuming that the images live in _out.
         self.data_dir = data_dir
         self.transform = transform
-        if goal_image == None:
-            print("WARNING: MUST PROVIDE GOAL IMAGE.")
-        self.goal_image = goal_image
+        self.goal_images = goal_images
         self.delta = delta
         self.load_as_grayscale = load_as_grayscale
         self.df = self._get_dataframe()
@@ -74,10 +72,11 @@ class VelocityPredictionCarlaDataSet(Dataset):
         control_input_df = self._get_control_input_df()
         control_input_df['input_num'] = control_input_df['input_num'].astype('int') 
         filename_df = self._get_image_path_df()
-        filename_df['index'] = filename_df['index'].astype('int')
-        df = control_input_df.merge(right=filename_df,
-                                    left_on='input_num',
-                                    right_on='index')
+        pairwise_df = self._get_pairwise_df(filename_df)
+        pairwise_df['index'] = pairwise_df['index'].astype('int')
+        df = control_input_df.merge(right=pairwise_df,
+                                    left_on=['input_num', 'trajectory'],
+                                    right_on=['index', 'trajectory'])
         stationary_mask = (df['src'] == df['tgt'])
         ctr1_col = df['ctr1'].copy()
         ctr2_col = df['ctr2'].copy()
@@ -85,14 +84,15 @@ class VelocityPredictionCarlaDataSet(Dataset):
         ctr2_col[stationary_mask] = 0
         df['ctr1'] = ctr1_col
         df['ctr2'] = ctr2_col
-        df = df[['ctr1', 'ctr2', 'src', 'tgt']]
-        return df
+        df = df[['trajectory', 'index', 'ctr1', 'ctr2', 'src', 'tgt']]
+        return df.drop_duplicates()
 
     def _get_control_input_df(self):
         # xcxc I'm also assuming that our columns in control_input stay static like so.
         control_input_df = pd.read_csv(os.path.join(self.data_dir, 'control_input.txt'),
-                               names=['input_num', 'ctr1', 'ctr2'])
+                               names=['trajectory', 'input_num', 'ctr1', 'ctr2'])
         control_input_df['input_num'] = control_input_df['input_num'].astype('str')
+        control_input_df['trajectory'] =control_input_df['trajectory'].astype('str')
         return control_input_df
     
     def _get_image_path_df(self):
@@ -104,40 +104,87 @@ class VelocityPredictionCarlaDataSet(Dataset):
         # We can then make a map with our data...
         filename_groupings = {}
         for fn in all_files_in_out:
+            # Apologies for the hardcoding
             fn_number = str(int(fn.split('_')[0]))
-            if fn_number not in filename_groupings:
-                filename_groupings[fn_number] = []
-            filename_groupings[fn_number].append(fn)
+            trajectory_number = str(int(fn.split('_')[2].split('.')[0]))
+            if (fn_number, trajectory_number) not in filename_groupings:
+                filename_groupings[(fn_number, trajectory_number)] = []
+            filename_groupings[(fn_number, trajectory_number)].append(fn)
             
         # Then make a dataframe from this dictionary
-        filename_df = pd.DataFrame.from_dict(
-            filename_groupings, orient='index').reset_index()
-        filename_df = filename_df.dropna(subset=[0,1]) # Drop if any of our images is None.
-        filename_df = filename_df.rename(columns={0: "src"})[['index', 'src']] # Project to just get our source images.
-        filename_df = self._get_pairwise_combinations(filename_df)
+        filename_df = self._get_initial_filename_dataframe(filename_groupings)
         return filename_df
     
-    def _get_pairwise_combinations(self, df):
+    def _get_initial_filename_dataframe(self, filename_groupings):
+        '''
+        Given the filename groupings from the above, create a dataframe
+        of the schema [trajectory, index, image1, image2]
+        '''
+        filename_df = pd.DataFrame(columns=['trajectory', 'index', 'src'])
+        for k,v in filename_groupings.items():
+            (index, traj) = k
+            img1 = None
+            if len(v) == 1:
+                img1 = v[0]
+            filename_df = filename_df.append({
+                'trajectory': traj,
+                'index': index,
+                'src': img1
+            }, ignore_index=True)
+        filename_df['trajectory'] = filename_df['trajectory'].astype('str')
+        filename_df['index'] = filename_df['index'].astype('int')
+        filename_df = filename_df.dropna(subset=['src']) # Drop if any of our images is None.
+        return filename_df
+    
+    def _get_pairwise_df(self, filename_df):
+        pairwise_df = pd.DataFrame(columns=['trajectory', 'index', 'src', 'tgt'])
+        trajectory_map = self._construct_trajectory_map(filename_df)
+        for trajectory, goal_fn in trajectory_map.items():
+            fn_subset_df = filename_df[filename_df['trajectory']==trajectory]
+            pairwise_df = self._get_pairwise_combinations_for_goal(
+                goal_fn, fn_subset_df, pairwise_df)
+        pairwise_df['trajectory'] = pairwise_df['trajectory'].astype('str')
+        pairwise_df['index'] = pairwise_df['index'].astype('str')
+        return pairwise_df
+    
+    def _construct_trajectory_map(self, filename_df):
+        '''
+        Constructs a map such that
+        {trajectory: goal}
+        So then it's just a matter of iterating through this map.
+        '''
+        if len(self.goal_images) > 0:
+            return self.goal_images
+        trajectories = filename_df['trajectory'].unique().tolist()
+        def helper(traj):
+            return filename_df[filename_df['trajectory']==traj]['src'].max()
+            
+        goal_filenames = map(lambda t: helper(t), trajectories)
+        goal_filenames = list(goal_filenames)
+        return {trajectories[i]: goal_filenames[i] for i in range(len(trajectories))}
+    
+    def _get_pairwise_combinations_for_goal(self, goal_image, filename_df, pairwise_df):
         '''
         With filename_df, we construct the ('index', 'src', 'tgt' here), constructed by 
         '''
-        pairwise_df = pd.DataFrame(columns=['index', 'src', 'tgt'])
-        num_rows, _ = df.shape
-        tgt_index = int(self.goal_image.split('_')[0]) # Get which # image we want to go up to
+        num_rows, _ = filename_df.shape
+        tgt_index = int(goal_image.split('_')[0]) # Get which # image we want to go up to
         
         for i in range(num_rows):
             # Get data from our current row
-            ith_row = df.iloc[i]
+            ith_row = filename_df.iloc[i]
             index = int(ith_row['index'])
             # Get all the potential target images
             src_filename = ith_row['src']
-            indices = list(np.arange(index, tgt_index, self.delta * 4)) # Hardcoding in 4 because images increment by 4
+            timestep = 1 # images increment by 1
+            indices = list(np.arange(index, tgt_index, self.delta * timestep)) # Hardcoding in 4 because images increment by 4
             if self.delta != 1:
-                indices.append(index + 4) # And to get t+1 as well.
-            tgt_rows = df[df['index'].astype('int').isin(indices)] # Get all the target rows
+                indices.append(index + timestep) # And to get t+1 as well.
+            tgt_rows = filename_df[filename_df['index'].astype('int').isin(indices)] # Get all the target rows
             # Then loop through our filenames and pair them together and append them to our df
             for tgt_filename in tgt_rows['src']:
                 pairwise_df = pairwise_df.append({
+                    'trajectory': ith_row['trajectory'],
                     'index': index,
                     'src': src_filename,
                     'tgt': tgt_filename

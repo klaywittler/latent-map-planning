@@ -21,6 +21,7 @@ except IndexError:
 import carla
 from agents.navigation.basic_agent import BasicAgent
 from agents.tools.misc import *
+from siameseCVAE import *
 
 from latent_agent import *
 from environment import *
@@ -81,12 +82,13 @@ def game_loop(options_dict):
                 transforms.Resize((150,200)),
                 transforms.ToTensor()])
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
-            # model = 
-            # model.load_state_disct(torch.load(PATH))
-            # model.to(device)
-            # model.eval()
+            model = siameseCVAE(batch=1)
+            checkpoint = torch.load('./siamese_chpt.pt')
+            model.load_state_dict(checkpoint) 
+            model.to(device)
+            model.eval()
 
-            agent = LatentAgent(vehicle, model=model, device=device, transform=transform)
+            agent = LatentAgent(vehicle, model=model, device=device) # , transform=transform
             agent.set_destination(options_dict['goal_image'],transform=transform)
         else:
             print('Going to ', destination_transform)
@@ -107,6 +109,7 @@ def game_loop(options_dict):
 
         sp = 2
 
+        print('Starting simulation.')
         while True:
             world.world.tick()
             world_snapshot = world.world.wait_for_tick(60.0)
