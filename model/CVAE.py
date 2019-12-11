@@ -14,7 +14,7 @@ class CVAE(nn.Module):
 		self.hidden = 256
 		ch_sz = 3
 		last_conv = 4
-		self.tensor = (2,last_conv,300,400)
+		self.tensor = (1,last_conv,300,400)
 		flat = np.prod(self.tensor)
 
 		# channel_in, c_out, kernel_size, stride, padding
