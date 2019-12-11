@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils # We should use this eventually.
 from PIL import Image
 import numbers
+import glob
 
 class VelocityPredictionCarlaDataSet(Dataset):
     def __init__(self, data_dir, goal_images={}, delta=100, load_as_grayscale=False, transform=None):
@@ -196,9 +197,7 @@ class VelocityPredictionCarlaDataSet(Dataset):
         Retrieves all the filenames in the data directory with some end extension.
         Currently, end is png.
         '''
-        # A little cryptic, but it just gets the list of all filenames
-        all_files_in_out = [x[2] for x in os.walk(os.path.join(self.data_dir, '_out'))][0]
-        # Then filter out by getting only the png files. We can remove this step if need be.
-        all_files_in_out = [img_name for img_name in all_files_in_out if img_name.split('.')[1] == end]
-        return all_files_in_out
+        full_data = glob.glob(os.path.join(self.data_dir, '_out', '**.' + end))
+        abbrev_data = [x.split('/')[-1] for x in full_data]
+        return abbrev_data
     
