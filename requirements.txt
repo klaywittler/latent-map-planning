@@ -1,0 +1,5 @@
+numpy
+pytorch
+opencv-python
+pandas
+Pillow

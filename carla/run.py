@@ -19,24 +19,31 @@ except IndexError:
     pass
 
 import carla
-from agents.navigation.roaming_agent import RoamingAgent
 from agents.navigation.basic_agent import BasicAgent
-from agents.tools.misc import get_speed
+from agents.tools.misc import *
+
+from latent_agent import *
+from environment import *
 
 import random
 import time
 import threading
 import weakref
 import numpy as np
-from environment import *
 
-TRAJECTORY_NUM = 6
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, utils # We should use this eventually.
+from torch import nn, optim
+from torch.nn import functional as F
 
-DEBUG = False
+TRAJECTORY_NUM = 1
 SYNC = True
+DEBUG = False
 SPAWN_POINT_INDICES = [116,198]
-AGENT = 'basic'
+AGENT = 'latent'
 NUM_CAM = 1
+GOAL_IMAGE = "./goal_image.png"
 
 def game_loop(options_dict):
     world = None
@@ -53,7 +60,6 @@ def game_loop(options_dict):
 
         vehicle_bp = 'model3'
         vehicle_transform = spawn_points[options_dict['spawn_point_indices'][0]]
-        # vehicle_transform.location.x -= 60
         vehicle_transform.location.x -= (20 + np.random.normal(0.0, 20, size=1).item()) # start 80 std 20 # start 40 std 15 # start 10 std 10
         
         vehicle = Car(vehicle_bp, vehicle_transform, world)
@@ -67,32 +73,37 @@ def game_loop(options_dict):
             else:
                 ticks += 1
 
-        agent = BasicAgent(vehicle.vehicle)
-        
-        destination_point = spawn_points[options_dict['spawn_point_indices'][1]].location
 
-        print('Going to ', destination_point)
-        agent.set_destination((destination_point.x, destination_point.y, destination_point.z))
-        
+        destination_transform = spawn_points[options_dict['spawn_point_indices'][1]]
+
+        if options_dict['agent'] == 'latent':
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
+            # model = 
+            # model.load_state_disct(torch.load(PATH))
+            # model.to(device)
+            # model.eval()
+
+            agent = LatentAgent(vehicle)
+            agent.set_destination(options_dict['goal_image'])
+        else:
+            print('Going to ', destination_transform)
+            agent = BasicAgent(vehicle.vehicle)
+            agent.set_destination((destination_transform.location.x, destination_transform.location.y, destination_transform.location.z))
+
         camera_bp = ['sensor.camera.rgb', 'sensor.camera.depth', 'sensor.lidar.ray_cast']
-        
 
         if options_dict['num_cam'] == 1:
             camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15, yaw=0))
-            cam1 = Camera(camera_bp[0], camera_transform, vehicle, options_dict['trajector_num'], save_data=True)
+            cam1 = Camera(camera_bp[0], camera_transform, vehicle, options_dict['trajector_num'], save_data=False)
         elif options_dict['num_cam'] == 2:
             camera_transform = [carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15, yaw=40)), carla.Transform(carla.Location(x=1.5, z=2.4), carla.Rotation(pitch=-15, yaw=-40)), carla.Transform(carla.Location(x=1.5, z=2.4))]
-            cam1 = Camera(camera_bp[0], camera_transform[0], vehicle, options_dict['trajector_num'], save_data=True)
-            cam2 = Camera(camera_bp[0], camera_transform[1], vehicle, options_dict['trajector_num'], save_data=True)
-        # depth1 = Camera(camera_bp[1], camera_transform[0], vehicle)
-        # depth2  = Camera(camera_bp[1], camera_transform[1], vehicle)
-        # lidar = Lidar(camera_bp[2], camera_transform[2], vehicle)
+            cam1 = Camera(camera_bp[0], camera_transform[0], vehicle, options_dict['trajector_num'], save_data=False)
+            cam2 = Camera(camera_bp[0], camera_transform[1], vehicle, options_dict['trajector_num'], save_data=False)
 
         prev_location = vehicle.vehicle.get_location()
 
         sp = 2
 
-        file = open("control_input.txt", "a")
         while True:
             world.world.tick()
             world_snapshot = world.world.wait_for_tick(60.0)
@@ -104,25 +115,22 @@ def game_loop(options_dict):
             # while world_snapshot.frame_count!=depth.frame_n or world_snapshot.frame_count!=segment.frame_n:
             #     time.sleep(0.05)
 
-            control = agent.run_step()
-            control.steer = np.clip(control.steer+np.random.normal(0.0, 0.5, size=1), -1.0, 1.0).item()
-            control.throttle = np.clip(control.throttle+np.random.normal(0.5, 0.25, size=1), 0.0, 1.0).item()
-            
+            control = agent.run_step()            
             vehicle.vehicle.apply_control(control)
 
-            w = str(options_dict['trajector_num']) + ',' + str(world_snapshot.frame_count) + ',' + str(control.steer) + ',' + str(get_speed(vehicle.vehicle))  + '\n'
-            file.write(w)
-
+            # check if destination reached
             current_location = vehicle.vehicle.get_location()
-
-            if current_location.distance(prev_location) <= 0.0 and current_location.distance(destination_point) <= 10:
-                print('distance from destination: ', current_location.distance(destination_point))
+            # kind of hacky way to test destination reached and doesn't always work - may have to manually stop with ctrl c
+            if current_location.distance(prev_location) <= 0.0 and current_location.distance(destination_transform.location) <= 10: 
+                print('distance from destination: ', current_location.distance(destination_transform.location))
+                # if out of destinations break else go to next destination
                 if len(options_dict['spawn_point_indices']) <= sp:
                     break
                 else:
-                    destination_point = spawn_points[options_dict['spawn_point_indices'][sp]].location
-                    print('Going to ', destination_point)
-                    agent.set_destination((destination_point.x, destination_point.y, destination_point.z))
+                    destination_transform.location = spawn_points[options_dict['spawn_point_indices'][sp]].location
+                    print('Going to ', destination_transform.location)
+                    # agent.set_destination((destination_transform.location.x, destination_transform.location.y, destination_transform.location.z))
+                    agent.set_destination(vehicle_transform, destination_transform)
                     sp += 1
 
             prev_location = current_location
@@ -146,8 +154,9 @@ if __name__ == '__main__':
         'agent': AGENT,
         'spawn_point_indices': SPAWN_POINT_INDICES,
         'debug': DEBUG,
-        'num_cam':NUM_CAM,
         'sync': SYNC,
-        'trajector_num':TRAJECTORY_NUM
+        'num_cam':NUM_CAM,
+        'trajector_num':TRAJECTORY_NUM,
+        'goal_image':GOAL_IMAGE
     }
     game_loop(options_dict)
