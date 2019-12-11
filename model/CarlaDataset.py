@@ -5,6 +5,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils # We should use this eventually.
 from PIL import Image
+import glob
 import numbers
 
 class CarlaDataset(Dataset):
@@ -119,16 +120,19 @@ class CarlaDataset(Dataset):
         timestep_df = self._get_filename_dataframe_with_steps(filename_df)
         return timestep_df
     
+    def _get_files_in_out(self):
+        full_data = glob.glob(os.path.join(self.data_dir, '_out', '**.png'))
+        abbrev_data = [x.split('/')[-1] for x in full_data]
+        return abbrev_data
+    
     def _get_filename_groupings(self):
         '''
         Reads in all the filenames, then groups them by
         (trajectory, timestep): [images]
         '''
         # A little cryptic, but it just gets the list of all filenames
-        all_files_in_out = [x[2] for x in os.walk(os.path.join(self.data_dir, '_out'))][0]
-        # Then filter out by getting only the png files. We can remove this step if need be.
-        all_files_in_out = [img_name for img_name in all_files_in_out if img_name.split('.')[1] == 'png']
-
+        all_files_in_out = self._get_files_in_out()
+        
         # We can then make a map with our data...
         filename_groupings = {}
         for fn in all_files_in_out:
