@@ -83,6 +83,7 @@ class LatentAgent(Agent):
             end_img = torch.from_numpy(end_img).float().to(self.device)
 
             steering, velocity = self.model.forward(current_img, end_img)
+            xhat, yhat, z, z_mean, z_logvar = self.model.forward(current_img, end_img)
             steering = np.clip(steering.numpy(), -1.0, 1.0).item()
             velocity = velocity.numpy()
         else:
