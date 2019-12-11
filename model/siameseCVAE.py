@@ -5,19 +5,20 @@ from torch.nn import functional as F
 import numpy as np
 import pdb
 
-#input is a tuple of images t and t+1 with lidar and control input
 class siameseCVAE(nn.Module):
-	def __init__(self):
+	def __init__(self,batch=4):
 		super().__init__()
 		d = 0.4
 		self.z_size = 64
-		self.hidden = 1024
 		self.small = 256
-		ch_sz = 3
+		self.hidden = 1024
+		ch_sz = 1
+		c1 = 64
+		c2 = 16
 		last_conv = 4
-		self.tensor = (1,last_conv,300,400)
-		flat = np.prod(self.tensor)*2
-		self.flat = flat
+		self.tensor = (batch,last_conv,150,200)
+		flat = np.prod(self.tensor)
+		flat2 = flat*2
 
 		# channel_in, c_out, kernel_size, stride, padding
 		def convbn(ci,co,ksz,s=1,pz=0):		#ReLu nonlinearity
@@ -39,41 +40,46 @@ class siameseCVAE(nn.Module):
 		#Encoder NN
 		self.encx = nn.Sequential(
 				nn.Dropout(d),
-				convbn(ch_sz,64,3,1,1),
-				convbn(64,16,1,1),
-				convbn(16,last_conv,1,1))
+				convbn(ch_sz,c1,3,1,1),
+				convbn(c1,c2,3,1,1),
+				convbn(c2,last_conv,3,1,1))
 		self.ency = nn.Sequential(
 				nn.Dropout(d),
-				convbn(ch_sz,64,3,1,1),
-				convbn(64,16,1,1),
-				convbn(16,last_conv,1,1))
+				convbn(ch_sz,c1,3,1,1),
+				convbn(c1,c2,3,1,1),
+				convbn(c2,last_conv,3,1,1))
 		self.m1 = nn.Sequential(
 				nn.Dropout(d),
-				mlp(flat,self.hidden),
+				mlp(flat2,self.hidden),
 				mlp(self.hidden, self.small))
 		self.zmean = nn.Linear(self.small,self.z_size)
-		self.zstdev = nn.Linear(self.small,self.z_size)
+		self.zlogvar = nn.Linear(self.small,self.z_size)
 
 		#Decoder NN
 		self.expand_z = nn.Linear(self.z_size,self.small)
-		self.m2 = nn.Sequential(
+		self.mx = nn.Sequential(
+				nn.Dropout(d),
+				mlp(self.small,self.hidden),
+				mlp(self.hidden,flat))
+		self.my = nn.Sequential(
 				nn.Dropout(d),
 				mlp(self.small,self.hidden),
 				mlp(self.hidden,flat))
 		self.decx = nn.Sequential(
 				nn.Dropout(d),
-				convbn(last_conv,16,1,1),
-				convbn(16,64,1,1),
-				convout(64,ch_sz,1,1))
+				convbn(last_conv,c2,3,1,1),
+				convbn(c2,c1,3,1,1),
+				convout(c1,ch_sz,3,1,1))
 		self.decy = nn.Sequential(
 				nn.Dropout(d),
-				convbn(last_conv,16,1,1),
-				convbn(16,64,1,1),
-				convout(64,ch_sz,1,1))
+				convbn(last_conv,c2,3,1,1),
+				convbn(c2,c1,3,1,1),
+				convout(c1,ch_sz,3,1,1))
 
-	def encoder(self, x, y, ctrl):
-		h_x = torch.flatten(self.encx(x))
-		h_y = torch.flatten(self.ency(y))	
+	def encoder(self, x, y):
+		# Flatten enc output
+		h_x = self.encx(x).view(-1)
+		h_y = self.ency(y).view(-1)
 		# Concatenate flat convs
 		h_layer = torch.cat((h_x,h_y))
 		h = self.m1(h_layer)
@@ -81,27 +87,31 @@ class siameseCVAE(nn.Module):
 
 	def bottleneck(self, x):
 		z_mean = self.zmean(x)
-		z_stdev = self.zstdev(x)
+		z_logvar = self.zlogvar(x)
 		#reparam to get z latent sample
-		std = torch.exp(0.5*z_stdev)
+		std = torch.exp(0.5*z_logvar)
 		eps = torch.randn_like(std)
 		z = z_mean + eps*std
-		return z, z_mean, z_stdev
+		return z, z_mean, z_logvar
 
 	def decoder(self, z):
 		#check the nonlinearities of this layer
 		h = self.expand_z(z)
-		h_layer = self.m2(h)
-		#Split in 2
-		h_x = h_layer[:int(self.flat/2)]
-		h_y = h_layer[int(self.flat/2):]
+		#exand z to each decoder head
+		h_x = self.mx(h)
+		h_y = self.my(h)
 		#make sure to reshape data correctly and decode
-		x = self.decx(torch.reshape(h_x,(self.tensor)))
-		y = self.decy(torch.reshape(h_x,(self.tensor)))
+		x = self.decx(h_x.view(self.tensor))
+		y = self.decy(h_x.view(self.tensor))
 		return x, y
 
-	def forward(self, x, y, ctrl):
-		h = self.encoder(x, y, ctrl)
-		z, z_mean, z_stdev = self.bottleneck(h)
+	def forward(self, x, y):
+		h = self.encoder(x, y)
+		z, z_mean, z_logvar = self.bottleneck(h)
 		x_hat, y_hat = self.decoder(z)
-		return x_hat, y_hat, z, z_mean, z_stdev
+		return x_hat, y_hat, z, z_mean, z_logvar
+
+	def encode_get_z(self, x, y):
+		h = self.encoder(x, y)
+		z, z_mean, z_logvar = self.bottleneck(h)
+		return z, z_mean, z_logvar
