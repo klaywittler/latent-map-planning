@@ -14,10 +14,9 @@ class CarlaDataset(Dataset):
         self.transform = transform
         self.load_as_grayscale = load_as_grayscale
         self.df = self._get_dataframe()
-        self.df_as_mat = self.df.values
-    
+        
     def __len__(self):
-        num_rows, _ = self.df_as_mat.shape
+        num_rows, _ = self.df.shape
         return num_rows
     
     def __getitem__(self, idx):
@@ -26,32 +25,13 @@ class CarlaDataset(Dataset):
         '''
         # We're gonna do some hardcore hard-coding here.
         # First, extract our control inputs
-        row = self.df_as_mat[idx, :]
-        # xcxc We're... We're not exactly doing anything with our control inputs. For now.
-        # We lop off the final value in -1 because of our dataframe- we 
-        # interpret the indicator value of whether it's stationary or not 
-        # as a boolean, and python interprets it as a number.
-        control_inputs = np.array(
-            [x for x in row if isinstance(x, numbers.Number)][:-1])
-        is_stationary = row[-1]
-        
-        curr_images = self._get_image_tensor_for_row(row[0], is_stationary)
-        # Get the next row
-        next_delta = 4 # xcxc This is a hardcoded parameter from Klayton's data.
-        next_input_id = int(row[0]) + next_delta
-        num_rows_next = np.sum(self.df['input_num'] == str(next_input_id))
-        if num_rows_next == 0:
-            # No next: treat it as if we're stationary
-            return (curr_images, curr_images, np.zeros(len(control_inputs)))
-        elif is_stationary == True:
-            # If it's stationary, then simply return our current images
-            return (curr_images, curr_images, np.zeros(len(control_inputs)))
-        else:
-            next_images = self._get_image_tensor_for_row(
-                str(next_input_id), is_stationary)
-            return (curr_images, next_images, control_inputs)
+        row = self.df.iloc[idx]
+        imgs_t0, imgs_t1 = self._get_image_tensor_for_row(row)
+        control_inputs = np.array([row['ctr1'], row['ctr2']])
     
-    def _get_image_tensor_for_row(self, row_id, is_stationary):
+        return (imgs_t0, imgs_t1, control_inputs)
+    
+    def _get_image_tensor_for_row(self, row):
         '''
         Inputs:
             row_id: String that represents the input_num
@@ -59,27 +39,24 @@ class CarlaDataset(Dataset):
             A (2 x H x W x 4) 4D matrix of the two images.
         '''
         # The row_id should be the input_num. Should also be a string.
-        which_row = (self.df['input_num'] == row_id)
-        where_stationary = (self.df['is_stationary'] == is_stationary)
-        row = self.df[which_row & where_stationary]
-        n_res, _ = row.shape
-        if n_res > 1:
-            # xcxc I'm assuming there's only one row per row_id.
-            # This may or may not be a strictly held invariant.
-            print("XCXC: THERE ARE MORE THAN 1 ROW FOR A ROW_ID")
-        row = row.values[0]
-        filenames = []
-        for ele in row:
-            if str(ele).split('.')[-1] == 'png':
-                filenames.append(ele)
-        filenames.sort()
-        images = []
-        for ele in filenames:
+        img_t0_filenames = [row['img1_t0'], row['img2_t0']]
+        img_t1_filenames = [row['img1_t1'], row['img2_t1']]
+        img_t0_filenames.sort()
+        img_t1_filenames.sort()
+        t0_images = []
+        for ele in img_t0_filenames:
             full_name = os.path.join(self.data_dir, '_out', ele)
             img_as_np_arr = self._load_image_and_maybe_apply_transform(full_name)
-            images.append(img_as_np_arr)
-        images = np.array(images)
-        return images
+            t0_images.append(img_as_np_arr)
+        t1_images = []
+        for ele in img_t1_filenames:
+            full_name = os.path.join(self.data_dir, '_out', ele)
+            img_as_np_arr = self._load_image_and_maybe_apply_transform(full_name)
+            t1_images.append(img_as_np_arr)
+        
+        t0_images = np.array(t0_images)
+        t1_images = np.array(t1_images)
+        return t0_images, t1_images
 
     def _load_image_and_maybe_apply_transform(self, image_loc):
         '''
@@ -115,26 +92,38 @@ class CarlaDataset(Dataset):
         control_input_df = self._get_control_input_df()
         filename_df = self._get_image_path_df()
         df = control_input_df.merge(right=filename_df,
-                                    left_on='input_num',
-                                    right_on='index')
-        # Then, we add a column to our dataframe saying whether it's stationary or not
-        num_rows, _ = df.shape
-        df['is_stationary'] = np.zeros((num_rows), dtype=bool)
-        # Then make a copy and set is_stationary to true...
-        df_copy = df.copy()
-        df_copy['is_stationary'] = np.ones((num_rows), dtype=bool)
-        # then stack and return
-        final_df = pd.concat([df, df_copy])
-        return final_df
+                                    left_on=['trajectory','input_num'],
+                                    right_on=['trajectory', 'index'])
+        df = df.drop_duplicates() # I have no idea why we have dupes
+        
+        stationary_mask = df['img1_t0'] == df['img1_t1']
+        ctr1_col = df['ctr1'].copy()
+        ctr2_col = df['ctr2'].copy()
+        ctr1_col[stationary_mask] = 0
+        ctr2_col[stationary_mask] = 0
+        df['ctr1'] = ctr1_col
+        df['ctr2'] = ctr2_col
+        return df
 
     def _get_control_input_df(self):
         # xcxc I'm also assuming that our columns in control_input stay static like so.
         control_input_df = pd.read_csv(os.path.join(self.data_dir, 'control_input.txt'),
-                               names=['input_num', 'ctr1', 'ctr2'])
-        control_input_df['input_num'] = control_input_df['input_num'].astype('str')
+                               names=['trajectory', 'input_num', 'ctr1', 'ctr2'])
+        control_input_df['input_num'] = control_input_df['input_num'].astype('int')
+        control_input_df['trajectory'] = control_input_df['trajectory'].astype('str')
         return control_input_df
     
     def _get_image_path_df(self):
+        filename_groupings = self._get_filename_groupings()
+        filename_df = self._get_initial_filename_dataframe(filename_groupings)
+        timestep_df = self._get_filename_dataframe_with_steps(filename_df)
+        return timestep_df
+    
+    def _get_filename_groupings(self):
+        '''
+        Reads in all the filenames, then groups them by
+        (trajectory, timestep): [images]
+        '''
         # A little cryptic, but it just gets the list of all filenames
         all_files_in_out = [x[2] for x in os.walk(os.path.join(self.data_dir, '_out'))][0]
         # Then filter out by getting only the png files. We can remove this step if need be.
@@ -143,14 +132,85 @@ class CarlaDataset(Dataset):
         # We can then make a map with our data...
         filename_groupings = {}
         for fn in all_files_in_out:
+            # Apologies for the hardcoding
             fn_number = str(int(fn.split('_')[0]))
-            if fn_number not in filename_groupings:
-                filename_groupings[fn_number] = []
-            filename_groupings[fn_number].append(fn)
-            
-        # Then make a dataframe from this dictionary
-        filename_df = pd.DataFrame.from_dict(
-            filename_groupings, orient='index').reset_index()
-        filename_df = filename_df.dropna(subset=[0,1]) # Drop if any of our images is None.
-#         filename_df = filename_df[filename_df['index'].astype('int') < 494] # Drop all the ones that are after 494
+            trajectory_number = str(int(fn.split('_')[2].split('.')[0]))
+            if (fn_number, trajectory_number) not in filename_groupings:
+                filename_groupings[(fn_number, trajectory_number)] = []
+            filename_groupings[(fn_number, trajectory_number)].append(fn)
+        return filename_groupings
+    
+    def _get_initial_filename_dataframe(self, filename_groupings):
+        '''
+        Given the filename groupings from the above, create a dataframe
+        of the schema [trajectory, index, image1, image2]
+        '''
+        filename_df = pd.DataFrame(columns=['trajectory', 'index', 'img1', 'img2'])
+        for k,v in filename_groupings.items():
+            (index, traj) = k
+            img1, img2 = None, None
+            v.sort()
+            if len(v) == 2:
+                img1, img2 = v[0], v[1]
+            elif len(v) == 1:
+                img1 = v[0]
+            filename_df = filename_df.append({
+                'trajectory': traj,
+                'index': index,
+                'img1': img1,
+                'img2': img2
+            }, ignore_index=True)
+        filename_df['trajectory'] = filename_df['trajectory'].astype('str')
+        filename_df['index'] = filename_df['index'].astype('int')
+        filename_df = filename_df.dropna(subset=['img1','img2']) # Drop if any of our images is None.
         return filename_df
+    
+    def _get_filename_dataframe_with_steps(self, filename_df):
+        '''
+        Given the filename df from the above, loop through it and get 
+        the (t,t) and (t, t+1) pairings.
+        '''
+        schema = [
+            'trajectory',
+            'index',
+            'img1_t0',
+            'img2_t0',
+            'img1_t1',
+            'img2_t1']
+        timestep_df = pd.DataFrame(columns=schema)
+        num_rows, _ = filename_df.shape
+        for i in range(num_rows): # blah blah yeah i know i'm not vectorizing. 
+            ith_row = filename_df.iloc[i]
+            row_dict = {
+                'trajectory': ith_row['trajectory'],
+                'index': ith_row['index'],
+                'img1_t0': ith_row['img1'],
+                'img2_t0': ith_row['img2']
+            }
+            # First, construct the stationary row
+            stationary_row = row_dict.copy()
+            stationary_row['img1_t1'] = ith_row['img1']
+            stationary_row['img2_t1'] = ith_row['img2']
+            timestep_df = timestep_df.append(stationary_row, ignore_index=True)
+            # Then, construct the t+1th row IF it exists
+            next_timestep_row = self._construct_next_timestep_row(
+                row_dict, ith_row, filename_df)
+            timestep_df = timestep_df.append(next_timestep_row, ignore_index=True)
+        timestep_df['trajectory'] = timestep_df['trajectory'].astype('str')
+        timestep_df['index'] = timestep_df['index'].astype('int')
+        return timestep_df
+
+    def _construct_next_timestep_row(self, row_dict, ith_row, filename_df):
+        delta = 4
+        next_index = ith_row['index'] + delta
+        mask = (filename_df['index'] == next_index) & (filename_df['trajectory'] == ith_row['trajectory'])
+        res = filename_df[mask]
+        num_results = len(res)
+        if num_results > 1:
+            print("THERE'S MORE THAN ONE RESULT WHEN MAKING THE DATAFRAME")
+        if num_results == 1:
+            next_step_row = row_dict.copy()
+            next_step_row['img1_t1'] = res['img1'].values[0]
+            next_step_row['img2_t1'] = res['img2'].values[0]
+            return next_step_row
+        return None
