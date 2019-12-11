@@ -27,6 +27,7 @@ import time
 import threading
 import numpy as np
 import cv2
+from PIL import Image
 
 import weakref
 
@@ -107,7 +108,8 @@ class Camera(object):
             return
         vector_img = np.array(data.raw_data)
         img_rgba = vector_img.reshape((IM_HEIGHT,IM_WIDTH,4))
-        img_g = cv2.cvtColor(img_rgba, cv2.COLOR_RGB2GRAY)
+        pil_img = Image.fromarray(img_rgba)
+        img_g = pil_img.convert('L')
         self.vehicle.image = img_g
 
 

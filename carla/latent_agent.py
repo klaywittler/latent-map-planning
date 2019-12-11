@@ -61,13 +61,16 @@ class LatentAgent(Agent):
         pil_img = Image.open(target_img)
         if load_as_grayscale:
             pil_img = pil_img.convert('L')
+
+        self.transform = transform
+        self.end_img = self.transform(pil_img).float().to(self.device).unsqueeze(0)
         
-        if transform:
-            self.transform = transform
-            transform_result = self.transform(pil_img)
-            self.end_img = np.asarray(transform_result[:3, :, :])
-        else:
-            self.end_img = np.array(pil_img)
+        # if transform:
+        #     self.transform = transform
+        #     transform_result = self.transform(pil_img)
+        #     self.end_img = np.asarray(transform_result[:3, :, :])
+        # else:
+        #     self.end_img = np.array(pil_img)
 
         if show_img:
             cv2.imshow("goal", self.end_img)
@@ -79,13 +82,14 @@ class LatentAgent(Agent):
             cv2.waitKey(1)
 
         if self.model is not None:
-            current_img = torch.from_numpy(current_img).float().to(self.device)
-            end_img = torch.from_numpy(end_img).float().to(self.device)
+            current_img = self.transform(current_img).float().to(self.device).unsqueeze(0)
 
-            steering, velocity = self.model.forward(current_img, end_img)
+            steering = np.clip(np.random.normal(0.0, 1, size=1), -1.0, 1.0).item()
+            velocity = np.random.normal(5, 5, size=1).item()
+            # steering, velocity = self.model.forward(current_img, end_img)
             xhat, yhat, z, z_mean, z_logvar = self.model.forward(current_img, end_img)
-            steering = np.clip(steering.numpy(), -1.0, 1.0).item()
-            velocity = velocity.numpy()
+            # steering = np.clip(steering.numpy(), -1.0, 1.0).item()
+            # velocity = velocity.numpy()
         else:
             steering = np.clip(np.random.normal(0.0, 1, size=1), -1.0, 1.0).item()
             velocity = np.random.normal(5, 5, size=1).item()
