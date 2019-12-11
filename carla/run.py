@@ -77,14 +77,17 @@ def game_loop(options_dict):
         destination_transform = spawn_points[options_dict['spawn_point_indices'][1]]
 
         if options_dict['agent'] == 'latent':
+            transform = transforms.Compose([
+                transforms.Resize((150,200)),
+                transforms.ToTensor()])
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
             # model = 
             # model.load_state_disct(torch.load(PATH))
             # model.to(device)
             # model.eval()
 
-            agent = LatentAgent(vehicle)
-            agent.set_destination(options_dict['goal_image'])
+            agent = LatentAgent(vehicle, model=model, device=device, transform=transform)
+            agent.set_destination(options_dict['goal_image'],transform=transform)
         else:
             print('Going to ', destination_transform)
             agent = BasicAgent(vehicle.vehicle)
