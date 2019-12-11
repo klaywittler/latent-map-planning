@@ -40,3 +40,5 @@ coverage.xml
 
 # Translations
 *.mo
+
+**/data
