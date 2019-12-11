@@ -25,25 +25,35 @@ from agents.navigation.basic_agent import BasicAgent
 import random
 import time
 import threading
+import numpy as np
+import cv2
 
 import weakref
 
 IM_WIDTH = 400
 IM_HEIGHT = 300
 SENSOR_TICK = 0.2
+FOV = 120
+
+def sensor_attributes(options_dict):
+    IM_WIDTH = options_dict['IM_WIDTH']
+    IM_HEIGHT = options_dict['IM_HEIGHT']
+    SENSOR_TICK = options_dict['SENSOR_TICK']
+    FOV = options_dict['FOV']
 
 class World(object):
-    def __init__(self, carla_world):
+    def __init__(self, carla_world, sync=True):
         self.world = carla_world
         self.map = self.world.get_map()
         self.blueprint_library = self.world.get_blueprint_library()
         self.actor_list = []
 
-        settings = self.world.get_settings()
-        # settings.no_rendering_mode = True
-        settings.synchronous_mode = True
-        settings.fixed_delta_seconds = 0.05
-        self.world.apply_settings(settings)
+        if sync:
+            print('Enabling synchronous mode.')
+            settings = self.world.get_settings()
+            settings.fixed_delta_seconds = 0.2
+            settings.synchronous_mode = True
+            self.world.apply_settings(settings)
 
     def destroy(self):
         print('destroying actors')
@@ -59,12 +69,14 @@ class Car(object):
         self.vehicle_transform = transform
         self.vehicle = self.world.world.spawn_actor(bp, self.vehicle_transform)
         self.world.actor_list.append(self.vehicle)
+        self.image = None
 
 class Camera(object):
-    def __init__(self, sensor_bp, transform, parent_actor):
+    def __init__(self, sensor_bp, transform, parent_actor, trajectory_num=1, save_data=False):
         self.vehicle = parent_actor
         self.camera_transform = transform
         self.world = self.vehicle.world
+        self.trajectory_num = trajectory_num
 
         bp = self.world.blueprint_library.find(sensor_bp)
         bp.set_attribute('image_size_x', f'{IM_WIDTH}')
@@ -76,20 +88,35 @@ class Camera(object):
         self.world.actor_list.append(self.sensor)
 
         weak_self = weakref.ref(self)
-        self.sensor.listen(lambda image: Camera.callback(weak_self,image))
+        if save_data:
+            self.sensor.listen(lambda image: Camera.callback(weak_self,image))
+        else:
+            self.sensor.listen(lambda image: Camera.process_img(weak_self,image))
 
     @staticmethod
     def callback(weak_self, data):
         self = weak_self()
         if not self:
             return
-        data.save_to_disk('_out/%08d_%i' % (data.frame_number, self.sensor.id))
+        data.save_to_disk('_out/%08d_%i_%i' % (data.frame_number, self.sensor.id, self.trajectory_num))
+
+    @staticmethod
+    def process_img(weak_self, data):
+        self = weak_self()
+        if not self:
+            return
+        vector_img = np.array(data.raw_data)
+        img_rgba = vector_img.reshape((IM_HEIGHT,IM_WIDTH,4))
+        img_g = cv2.cvtColor(img_rgba, cv2.COLOR_RGB2GRAY)
+        self.vehicle.image = img_g
+
 
 class Lidar(object):
-    def __init__(self, sensor_bp, transform, parent_actor):
+    def __init__(self, sensor_bp, transform, parent_actor, trajectory_num):
         self.vehicle = parent_actor
         self.camera_transform = transform
         self.world = self.vehicle.world
+        self.trajectory_num = trajectory_num
 
         bp = self.world.blueprint_library.find(sensor_bp)
         bp.set_attribute('sensor_tick', f'{SENSOR_TICK}')
@@ -106,7 +133,7 @@ class Lidar(object):
         self = weak_self()
         if not self:
             return
-        data.save_to_disk('_out/%08d_%i' % (data.frame_number, self.sensor.id))
+        data.save_to_disk('_out/%08d_%i_%i' % (data.frame_number, self.sensor.id, self.trajectory_num))
 
 def main():
     world = None
