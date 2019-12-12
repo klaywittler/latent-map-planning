@@ -103,6 +103,12 @@ def input2classification(control, lb, ub, num_class):
     interval_list = torch.linspace(lb,ub,num_class).to(device)
     val = abs(interval_list-control.unsqueeze(1))
     idx = torch.argmin(val, axis=1)
+    label = torch.zeros((control.shape[0],interval_list.shape[0])).to(device)
+    
+    i = np.arange(0, control.shape[0])
+    i = torch.from_numpy(i).to(device)
+
+    label[i,idx] = 1
     return idx
 
 def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name):
@@ -110,7 +116,7 @@ def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name)
     modelVel = netVel.to(device)
     total_step = len(dataloader)
     overall_step = 0
-    accuracy, loss = [], []
+    accuracy, loss_list = [], []
     for epoch in range(epochs):
         modelVel.train()
         modelVAE.eval()
@@ -134,12 +140,12 @@ def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name)
             loss.backward()
             optimizer.step()
 
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+            _, predicted = torch.max(vel, 1)
+            total += label_vel.size(0)
+            correct += (predicted == label_vel).sum().item()
             total_loss += loss.item()
 
-            acc = 100*(predicted == labels).sum().item()/labels.size(0)
+            acc = 100*(predicted == label_vel).sum().item()/label_vel.size(0)
             overall_step += 1
 
             if (i+1) % 10 == 0:
@@ -153,9 +159,9 @@ def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name)
             torch.save(model.state_dict(), chpt_path)
 
         accuracy.append(correct/total)
-        loss.append(total_loss/total)
+        loss_list.append(total_loss/total)
 
-    ells = {'accuracy':accuracy,'loss':loss}
+    ells = {'accuracy':accuracy,'loss':loss_list}
 
     return ells
 

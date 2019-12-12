@@ -11,11 +11,15 @@ class velocityNN(nn.Module):
         self.fc = nn.Sequential(
             nn.Dropout(0.2),
             nn.Linear(64,256),
-            nn.ReLU(True),
-            nn.Linear(256,256))
+            nn.ReLU(True))
+        
+        self.vel = nn.Linear(256,6)
+        self.steer = nn.Linear(256,11)
 
     def forward(self, x):
         h = self.fc(x)
-        vel = F.softmax(h, dim=6)
-        steer = F.softmax(h, dim=11)
-        return vel , steer
+        vel = self.vel(h)
+        steer = self.steer(h)
+        # vel = F.softmax(vel, dim=6)
+        # vel = F.softmax(steer, dim=11)
+        return vel.unsqueeze(0) , steer.unsqueeze(0)
