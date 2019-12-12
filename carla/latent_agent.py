@@ -34,14 +34,15 @@ class LatentAgent(Agent):
     target destination. This agent respects traffic lights and other vehicles.
     """
 
-    def __init__(self, vehicle, model=None, device='cpu', target_speed=50):
+    def __init__(self, vehicle, models=None, device='cpu', target_speed=50):
         """
 
         :param vehicle: actor to apply to local planner logic onto
         """
         super(LatentAgent, self).__init__(vehicle.vehicle)
 
-        self.model = model  
+        self.modelVAE = models['VAE']
+        self.modelVel = models['Vel']    
 
         self._proximity_threshold = 10.0  # meters
         self._state = AgentState.NAVIGATING
@@ -81,18 +82,32 @@ class LatentAgent(Agent):
             cv2.imshow("current", current_img)
             cv2.waitKey(1)
 
-        if self.model is not None:
-            current_img = self.transform(current_img).float().to(self.device).unsqueeze(0)
 
-            steering = np.clip(np.random.normal(0.0, 1, size=1), -1.0, 1.0).item()
-            velocity = np.random.normal(5, 5, size=1).item()
-            # steering, velocity = self.model.forward(current_img, end_img)
-            xhat, yhat, z, z_mean, z_logvar = self.model.forward(current_img, end_img)
-            # steering = np.clip(steering.numpy(), -1.0, 1.0).item()
-            # velocity = velocity.numpy()
-        else:
-            steering = np.clip(np.random.normal(0.0, 1, size=1), -1.0, 1.0).item()
-            velocity = np.random.normal(5, 5, size=1).item()
+        current_img = self.transform(current_img).float().to(self.device).unsqueeze(0)
+
+        # steering = np.clip(np.random.normal(0.0, 1, size=1), -1.0, 1.0).item()
+        # velocity = np.random.normal(5, 5, size=1).item()
+        # # steering, velocity = self.model.forward(current_img, end_img)
+        with torch.no_grad():
+            xhat, yhat, z, z_mean, z_logvar = self.modelVAE.forward(current_img, end_img)
+            vel, steer = self.modelVel.forward(z_mean)
+
+        speed = np.linspace(0,50,6)
+        angle = np.linspace(-1,1,11)
+        # _, predictedVel = torch.max(vel, 1)
+        # _, predictedSteer = torch.max(steer, 1)
+
+        vel = F.softmax(vel)
+        steer = F.softmax(steer)
+
+        print('velocity output ', torch.max(vel, 1))
+
+        velocity = sum(vel.squeeze(0).cpu().numpy()*speed)
+        steering = sum(steer.squeeze(0).cpu().numpy()*angle)
+
+        steering = np.clip(steering, -1.0, 1.0).item()
+
+        print(f'velocity: {velocity}, steering: {steering}')
 
         return steering, velocity
 
@@ -116,3 +131,4 @@ class LatentAgent(Agent):
             control = self.emergency_stop()
 
         return control
+
