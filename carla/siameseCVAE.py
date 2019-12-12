@@ -13,10 +13,10 @@ class siameseCVAE(nn.Module):
 		self.small = 256
 		self.hidden = 1024
 		ch_sz = 1
-		c1 = 64
+		c1 = 4
 		c2 = 16
-		last_conv = 4
-		self.tensor = (batch,last_conv,150,200)
+		last_conv = 16
+		self.tensor = (batch,last_conv,75,100)
 		flat = np.prod(self.tensor)
 		flat2 = flat*2
 

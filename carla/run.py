@@ -80,17 +80,17 @@ def game_loop(options_dict):
 
         if options_dict['agent'] == 'latent':
             transform = transforms.Compose([
-                transforms.Resize((150,200)),
+                transforms.Resize((75,100)),
                 transforms.ToTensor()])
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
             modelVAE = siameseCVAE(batch=1)
-            checkpointVAE = torch.load('./siamese_chpt.pt')
+            checkpointVAE = torch.load('./siamese_predict41616_75100.pt')
             modelVAE.load_state_dict(checkpointVAE) 
             modelVAE.to(device)
             modelVAE.eval()
 
             modelVel = velocityNN()
-            checkpointVel = torch.load('./velocity_single_test.pt')
+            checkpointVel = torch.load('./velocity_single.pt')
             modelVel.load_state_dict(checkpointVel) 
             modelVel.to(device)
             modelVel.eval()
