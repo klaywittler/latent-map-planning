@@ -22,6 +22,7 @@ import carla
 from agents.navigation.basic_agent import BasicAgent
 from agents.tools.misc import *
 from siameseCVAE import *
+from velocityNN import *
 
 from latent_agent import *
 from environment import *
@@ -79,16 +80,24 @@ def game_loop(options_dict):
 
         if options_dict['agent'] == 'latent':
             transform = transforms.Compose([
-                transforms.Resize((150,200)),
+                transforms.Resize((75,100)),
                 transforms.ToTensor()])
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
-            model = siameseCVAE(batch=1)
-            checkpoint = torch.load('./siamese_chpt.pt')
-            model.load_state_dict(checkpoint) 
-            model.to(device)
-            model.eval()
+            modelVAE = siameseCVAE(batch=1)
+            checkpointVAE = torch.load('./siamese_predict41616_75100.pt')
+            modelVAE.load_state_dict(checkpointVAE) 
+            modelVAE.to(device)
+            modelVAE.eval()
 
-            agent = LatentAgent(vehicle, model=model, device=device) # , transform=transform
+            modelVel = velocityNN()
+            checkpointVel = torch.load('./velocity_single.pt')
+            modelVel.load_state_dict(checkpointVel) 
+            modelVel.to(device)
+            modelVel.eval()
+
+            models = {'VAE':modelVAE,'Vel':modelVel}
+
+            agent = LatentAgent(vehicle, models=models, device=device) # , transform=transform
             agent.set_destination(options_dict['goal_image'],transform=transform)
         else:
             print('Going to ', destination_transform)
