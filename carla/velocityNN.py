@@ -9,12 +9,12 @@ class velocityNN(nn.Module):
         super().__init__()
 
         self.fc = nn.Sequential(
-            nn.Dropout(0.2),
-            nn.Linear(64,256),
-            nn.ReLU(True))
+            nn.Linear(64,512),
+            nn.ReLU(True),
+            nn.Dropout(0.2))
         
-        self.vel = nn.Linear(256,6)
-        self.steer = nn.Linear(256,11)
+        self.vel = nn.Linear(512,6)
+        self.steer = nn.Linear(512,11)
 
     def forward(self, x):
         h = self.fc(x)
