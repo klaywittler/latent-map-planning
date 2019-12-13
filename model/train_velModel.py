@@ -42,9 +42,6 @@ def trainVAE(net, optimizer, criterion, epochs, dataloader, exp_name):
 
             if (i+1) % 10 == 0:
                 print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch+1, epochs, i+1, total_step, loss.item()))
-            
-            if i == 25:
-                break
         
         if (epoch+1) % 10 == 0:
             chpt_path = base+'checkpoints/'+exp_name+'.pt'
@@ -86,8 +83,6 @@ def testVAE(net, criterion, dataloader):
         tk_list.append(tk_)
         recon_t0_list.append(xhat_)
         recon_tk_list.append(yhat_)
-        if i == 40:
-            break
 
     t0_list = np.asarray(t0_list)
     tk_list = np.asarray(tk_list)
@@ -140,7 +135,7 @@ def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name)
             loss.backward()
             optimizer.step()
 
-            _, predicted = torch.max(vel, 1)
+            _, predicted = torch.max(vel.data, 1)
             total += label_vel.size(0)
             correct += (predicted == label_vel).sum().item()
             total_loss += loss.item()
@@ -148,15 +143,12 @@ def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name)
             acc = 100*(predicted == label_vel).sum().item()/label_vel.size(0)
             overall_step += 1
 
-            if (i+1) % 10 == 0:
+            if (i+1) % 100 == 0:
                     print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {}'.format(epoch+1, epochs, overall_step, total_step*epochs, loss.item(), acc))
-
-            if i == 40:
-                break
             
-        if (epoch+1) % 10 == 0:
+        if (epoch+1) % 5 == 0:
             chpt_path = base+'checkpoints/'+exp_name+'.pt'
-            torch.save(model.state_dict(), chpt_path)
+            torch.save(modelVel.state_dict(), chpt_path)
 
         accuracy.append(correct/total)
         loss_list.append(total_loss/total)
@@ -167,7 +159,7 @@ def trainVel(netVAE, netVel, optimizer, criterion, epochs, dataloader, exp_name)
 
 if __name__ == '__main__':
     transform = transforms.Compose([
-        transforms.Resize((150,200)),
+        transforms.Resize((75,100)),
         transforms.ToTensor()])
 
     batch = 1
